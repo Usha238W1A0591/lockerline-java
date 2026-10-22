@@ -1,0 +1,8 @@
+
+free-window-hours: 48
+seed-dir: seed
+
+spring:
+  sql:
+    init:
+      mode: always
