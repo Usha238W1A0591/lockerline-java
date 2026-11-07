@@ -1,12 +1,12 @@
-
 package com.lockerline.error;
 
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -21,8 +21,17 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.lockerline.config.RequestIdFilter;
+
+/**
+ * Handles domain refusals, validation errors, a body Jackson cannot read -
+ * and every unexpected error.
+ */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(DomainException.class)
     public ProblemDetail refusal(DomainException e) {
@@ -31,6 +40,27 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setType(URI.create(e.type()));
         problem.setTitle(e.title());
         e.properties().forEach(problem::setProperty);
+        return problem;
+    }
+
+    /**
+     * Anything else that goes wrong is a 500 with a generic detail - never the exception's message or a stack
+     * trace - and the request's id, which the log line carries too.
+     */
+    @ExceptionHandler(Exception.class)
+    public ProblemDetail unexpected(Exception e) {
+        String requestId = MDC.get(RequestIdFilter.KEY);
+
+        log.error("unexpected error requestId={}", requestId, e);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Something went wrong on our side; quote the request id if you report it");
+
+        problem.setType(URI.create("/errors/internal"));
+        problem.setTitle("Internal error");
+        problem.setProperty("requestId", requestId);
+
         return problem;
     }
 
