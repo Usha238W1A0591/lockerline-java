@@ -1,6 +1,7 @@
 
 free-window-hours: 48
 seed-dir: seed
+code-hash-key: dev-only-change-me
 
 spring:
   sql:
