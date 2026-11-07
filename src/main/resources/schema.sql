@@ -1,4 +1,3 @@
-
 -- The tower, its doors and its residents. Run at every start-up, so every table is created only if missing.
 
 -- A door's state is not stored: it is free when current_parcel_id is null and holding otherwise.
@@ -19,8 +18,8 @@ CREATE TABLE IF NOT EXISTS doors (
 );
 
 -- A parcel in a door. Its public id (P001) is made from `id`; the database id itself is never shown.
--- A parcel in a door. Its public id (P001) is made from `id`; the database id itself is never shown.
 -- The pickup code is stored only as a keyed hash, with the moment it expires.
+-- A collected parcel keeps its dwell - how long it waited - stored, not recomputed on read.
 CREATE TABLE IF NOT EXISTS parcels (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     tower_id         BIGINT                    NOT NULL REFERENCES towers (id),
@@ -32,7 +31,8 @@ CREATE TABLE IF NOT EXISTS parcels (
     state            VARCHAR(10)               NOT NULL,
     code_hash        VARCHAR(64)               NOT NULL,
     code_expires_at  TIMESTAMP WITH TIME ZONE  NOT NULL,
-    code_used_at     TIMESTAMP WITH TIME ZONE
+    code_used_at     TIMESTAMP WITH TIME ZONE,
+    dwell_seconds    BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS residents (
@@ -41,4 +41,15 @@ CREATE TABLE IF NOT EXISTS residents (
     flat     VARCHAR(8)  NOT NULL,
     name     VARCHAR(80) NOT NULL,
     UNIQUE (tower_id, flat)
+);
+-- One row per transition (dropped, code_issued, opened), written in the same transaction as the change.
+-- Insert only: nothing in the app updates or deletes a row. `data` holds the event's facts as JSON text - ids and
+-- facts, never the code or a resident's name.
+CREATE TABLE IF NOT EXISTS events (
+    id        BIGINT                     AUTO_INCREMENT PRIMARY KEY,
+    tower_id  BIGINT                     NOT NULL REFERENCES towers (id),
+    parcel_id BIGINT                     NOT NULL REFERENCES parcels (id),
+    kind      VARCHAR(20)                NOT NULL,
+    at        TIMESTAMP WITH TIME ZONE   NOT NULL,
+    data      VARCHAR(2000)              NOT NULL
 );

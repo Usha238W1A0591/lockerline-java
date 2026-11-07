@@ -5,15 +5,17 @@ import org.springframework.stereotype.Service;
 import com.lockerline.error.NoSuchParcel;
 
 /**
- * Reading one parcel.
+ * Reading one parcel, with its events.
  */
 @Service
 public class ParcelService {
 
     private final ParcelRepository parcels;
+    private final EventLog events;
 
-    public ParcelService(ParcelRepository parcels) {
+    public ParcelService(ParcelRepository parcels, EventLog events) {
         this.parcels = parcels;
+        this.events = events;
     }
 
     public ParcelView parcel(String parcelId) {
@@ -27,7 +29,8 @@ public class ParcelService {
                 row.sizeClass(),
                 row.flat(),
                 row.state(),
-                row.droppedAt()
+                row.droppedAt(),
+                events.forParcel(row.id())
         );
     }
 }
