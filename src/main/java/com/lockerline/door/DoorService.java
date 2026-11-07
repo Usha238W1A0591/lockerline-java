@@ -1,47 +1,103 @@
 package com.lockerline.door;
 
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import com.lockerline.error.NoSuchDoor;
 import com.lockerline.error.NoSuchTower;
+import com.lockerline.parcel.ParcelIds;
 
-/** The wall: every door with its state, derived from what the door holds on every read. */
+/**
+ * Reading the doors on a tower's wall.
+ */
 @Service
 public class DoorService {
 
-  private final TowerRepository towers;
-  private final DoorRepository doors;
+    private final TowerRepository towers;
+    private final DoorRepository doors;
+    private final Clock clock;
 
-  public DoorService(TowerRepository towers, DoorRepository doors) {
+    public DoorService(TowerRepository towers, DoorRepository doors, Clock clock) {
         this.towers = towers;
         this.doors = doors;
-    }
-  
-    /** The wall, optionally only one size and/or one state; `free` counts the free doors among those shown. */
-    public WallView wall(String tower, SizeClass size, DoorState state) {
-       long towerId = towerId(tower);
-     List<WallDoor> shown = doors.all(towerId).stream()
-                .map(row -> new WallDoor(row.no(), row.sizeClass(), stateOf(row)))
-                .filter(d -> size == null || d.size() == size)
-                .filter(d -> state == null || d.state() == state)
-                .toList();
-        int free = (int) shown.stream().filter(d -> d.state() == DoorState.free).count();
-        return new WallView(tower, free, shown);
-    }
-    
-    public DoorDetail door(String tower, String no) {
-        DoorRepository.Row row = doors.one(towerId(tower), no).orElseThrow(() -> new NoSuchDoor(tower, no));
-        return new DoorDetail(row.no(), row.sizeClass(), stateOf(row));
+        this.clock = clock;
     }
 
-    private long towerId(String tower) {
-      return towers.idOf(tower).orElseThrow(() -> new NoSuchTower(tower));
+    public long towerId(String tower) {
+        return towers.idOf(tower).orElseThrow(() -> new NoSuchTower(tower));
     }
-    
-    private static DoorState stateOf(DoorRepository.Row row) {
-        return row.currentParcelId() == null ? DoorState.free : DoorState.holding;
-    }
+
+    public WallView wall(String tower, SizeClass size, DoorState state) {
+    long towerId = towerId(tower);
+
+    List<WallDoor> wallDoors = doors.all(towerId).stream()
+            .filter(row -> size == null || row.sizeClass() == size)
+            .filter(row -> state == null || stateOf(row) == state)
+            .map(this::wallDoor)
+            .toList();
+
+    int free = (int) wallDoors.stream()
+            .filter(door -> door.state() == DoorState.free)
+            .count();
+
+    return new WallView(tower, free, wallDoors);
 }
 
+    public DoorDetail door(String tower, String door) {
+    long towerId = towerId(tower);
+
+    DoorRepository.Row row = doors.one(towerId, door)
+            .orElseThrow(() -> new NoSuchDoor(tower, door));
+
+    DoorState state = stateOf(row);
+
+    if (state == DoorState.free) {
+        return new DoorDetail(
+                row.no(),
+                row.sizeClass(),
+                state,
+                null,
+                null,
+                null
+        );
+    }
+
+    long dwellSeconds = ChronoUnit.SECONDS.between(
+            row.droppedAt(), clock.instant()
+    );
+
+    return new DoorDetail(
+            row.no(),
+            row.sizeClass(),
+            state,
+            ParcelIds.format(row.currentParcelId()),
+            row.flat(),
+            dwellSeconds
+    );
+}
+
+    private DoorState stateOf(DoorRepository.Row row) {
+        return row.currentParcelId() == null ? DoorState.free : DoorState.holding;
+    }
+
+    private WallDoor wallDoor(DoorRepository.Row row) {
+        DoorState state = stateOf(row);
+
+        if (state == DoorState.free) {
+            return new WallDoor(row.no(), row.sizeClass(), state, null, null);
+        }
+
+        long dwellSeconds = ChronoUnit.SECONDS.between(row.droppedAt(), clock.instant());
+
+        return new WallDoor(
+                row.no(),
+                row.sizeClass(),
+                state,
+                ParcelIds.format(row.currentParcelId()),
+                dwellSeconds
+        );
+    }
+}

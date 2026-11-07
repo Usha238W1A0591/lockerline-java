@@ -31,7 +31,8 @@ import java.util.Map;
       return title;
     }
 
-    /** Extra fields for this refusal's answer (none for NoSuchTower or NoSuchDoor). */
+/** Extra fields the ticket names for this refusal (none by default). */
+
     public Map<String, Object> properties() {
       return Map.of();
     }
