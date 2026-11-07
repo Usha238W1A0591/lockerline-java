@@ -1,9 +1,18 @@
+# Every setting can come from the environment: an env-file passed to `docker run --env-file` is the only
+# configuration input. DATABASE_URL, HOST and PORT are mapped here; FREE_WINDOW_HOURS and CODE_HASH_KEY bind to
+# free-window-hours and code-hash-key through Spring's relaxed binding.
 
 free-window-hours: 48
 seed-dir: seed
 code-hash-key: dev-only-change-me
 
 spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:h2:file:./data/lockerline}
   sql:
     init:
       mode: always
+
+server:
+  address: ${HOST:127.0.0.1}
+  port: ${PORT:8080}
